@@ -48,6 +48,7 @@ drawOneOption = false
 randPlayerOneOption = true
 zeroSevenOption = false
 jumpInOption = false
+challengeOption = false
 
 startButtonObj_GUID = "d60f3a"
 startButtonObj = nil
@@ -79,6 +80,7 @@ drawingOption_GUID = "b36922"
 randomOption_GUID = "7f3e9e"
 zeroSevenOption_GUID = "6dbe87"
 jumpInOption_GUID = "055580"
+challengeOption_GUID = "20e735"
 
 playerHands = {}
 lastCardPlayedBy = nil
@@ -90,7 +92,20 @@ gameStarted = false
 needShuffle = false
 lastCardCount = 0
 
+lastPlayer = nil
+lastColor = nil
+challengeSuccess = false
+canChallenge = true
+
+version = "0.3.0"
+
 nextTurn = nil--coroutine.create(co)
+
+function onLoadMessage()
+  broadcastToAll("Scripted+ UNO by Tuumn", "White")
+  broadcastToAll("Version: " .. version, "White")
+  broadcastToAll("!reset : Resets the game at any time", "White")
+end
 
 function onFixedUpdate()
   if needShuffle
@@ -125,6 +140,7 @@ function onLoad(save_state)
     randomOptionObject = getObjectFromGUID(randomOption_GUID)
     zeroSevenOptionObject = getObjectFromGUID(zeroSevenOption_GUID)
     jumpInOptionObject = getObjectFromGUID(jumpInOption_GUID)
+    challengeOptionObject = getObjectFromGUID(challengeOption_GUID)
 
     deck = getObjectFromGUID(deckObject_GUID)
     deck.setPosition({-1.5, 1.5, 0})
@@ -137,6 +153,8 @@ function onLoad(save_state)
     playMat.lock()
 
     GrabPlayerList()
+
+    onLoadMessage()
 end
 
 function onPlayerDisconnect(player)
@@ -221,6 +239,16 @@ function toggleZeroSeven(obj, color)
     end
 end
 
+function toggleChallenge(obj, color)
+    challengeOption = not challengeOption
+    if challengeOption
+    then
+        obj.editButton({index=0, label='+4 Challenge Rule : On'})
+    else
+        obj.editButton({index=0, label='+4 Challenge Rule : Off'})
+    end
+end
+
 function setUp()
       currentPlayer_label = spawnObject({type="PiecePack_Suns",position = {100, 100, 0}, callback = "updatePlayerLabel"})
       currentDirection_label = spawnObject({type="PiecePack_Suns",position = {100, 100, 0}, callback = "updateDirectionLabel"})
@@ -248,6 +276,7 @@ function hideStartMenu()
     randomOptionObject.setScale({0,0,0})
     zeroSevenOptionObject.setScale({0,0,0})
     jumpInOptionObject.setScale({0,0,0})
+    challengeOptionObject.setScale({0,0,0})
 end
 
 function showStartMenu()
@@ -257,6 +286,7 @@ function showStartMenu()
     randomOptionObject.setScale({1,1,1})
     zeroSevenOptionObject.setScale({1,1,1})
     jumpInOptionObject.setScale({1,1,1})
+    challengeOptionObject.setScale({1,1,1})
 end
 
 function resetGame()
@@ -280,6 +310,8 @@ function resetGame()
     lastCard_Name = nil
     lastCard_Desc = nil
     lastCardPlayedBy = nil
+    lastPlayer = nil
+    lastColor = nil
 
     currentDirection_label.destruct()
     currentPlayer_label.destruct()
@@ -323,7 +355,7 @@ function onObjectEnterScriptingZone(zone, obj)
                     then
                         if yieldState ~= nil
                         then
-                            if yieldState == "stack"
+                            if yieldState == "stack" or yieldState == "stack/challenge"
                             then
                                 if obj.getName() == lastCard_Name
                                 then
@@ -405,6 +437,7 @@ function playCard(cardObj)
     then
         if coroutine.status(nextTurn) == "suspended"
         then
+            isChallenging = false
             coroutine.resume(nextTurn)
         end
     end
@@ -413,6 +446,7 @@ function playCard(cardObj)
     local playedByPlayer = getPlayerFromColor(playedByColor)
 
     lastCardPlayedBy = playedByPlayer
+    lastColor = lastCard_Desc
 
     if lastCardPlayedBy ~= nil
     then
@@ -560,6 +594,13 @@ function createSevenSelectionButton(button)
     button.createButton({click_function='clickTakeHandButton', label='Take hand', function_owner=Global, position={0, 0.1, 0}, rotation={0, 180, 0}, width=2000, height=850, font_size=350})
 end
 
+function createChallengeButton(button)
+    hideDrawButton()
+    button.lock()
+    button.setColorTint(getColorfromPlayer(currentPlayer.color))
+    button.createButton({click_function='clickChallengeButton', label='Challenge\n' .. lastPlayer.steam_name, function_owner=Global, position={0, 0.1, 0}, rotation={0, 180, 0}, width=2500, height=850, font_size=350})
+end
+
 function clickTakeHandButton(obj, color)
     if color == lastCardPlayedBy.color
       then
@@ -634,6 +675,10 @@ function clickStackingButton(obj, color)
         obj.destruct()
         showDrawButton()
     end
+    if challengeButton ~= nil
+    then
+      challengeButton.destruct()
+    end
 end
 
 function clickWildButton(obj, color)
@@ -652,6 +697,7 @@ function clickWildButton(obj, color)
         then
             lastCard_Desc = "BLUE"
         end
+
         broadcastToAll('Color Is Now ' .. lastCard_Desc,getColorfromCard(lastCard_Desc))
         playMat.setColorTint(getColorfromCard(lastCard_Desc))
 
@@ -661,6 +707,32 @@ function clickWildButton(obj, color)
         wildButtons[3].destruct()
         wildButtons[4].destruct()
         showDrawButton()
+    end
+end
+
+function clickChallengeButton(obj, color)
+    if color == currentPlayer.color
+    then
+        if lastPlayer ~= nil
+        then
+          local lastPlayer_Hand = lastPlayer.getHandObjects()
+          for i, card in ipairs(lastPlayer_Hand)
+          do
+            if card.getDescription() == lastColor
+            then
+              challengeSuccess = true
+              break
+            end
+          end
+        end
+
+        coroutine.resume(nextTurn)
+        obj.destruct()
+        showDrawButton()
+    end
+    if stackingButton ~= nil
+    then
+      stackingButton.destruct()
     end
 end
 
@@ -1088,6 +1160,7 @@ function nextPlayer(amt)
         end
     end
 
+    lastPlayer = currentPlayer
     currentPlayer = players[currentPlayer_index]
 
     updatePlayerLabel(currentPlayer_label)
@@ -1104,21 +1177,21 @@ function co()
     end
 
     if lastCard_Name == "7" and zeroSevenOption and #players > 1
-      then
-        for i, player in ipairs(players)
-        do
-          if player ~= lastCardPlayedBy
-          then
-            sevenPlayerButton = spawnObject({type="PiecePack_Suns",position = getDirectionLocation(player.color), rotation = getTokenRotation(lastCardPlayedBy.color), callback = "createSevenSelectionButton"})
-            local colorRGB = getColorfromPlayer(player.color)
-            sevenPlayerButton.setColorTint(colorRGB)
-          end
+    then
+      for i, player in ipairs(players)
+      do
+        if player ~= lastCardPlayedBy
+        then
+          sevenPlayerButton = spawnObject({type="PiecePack_Suns",position = getDirectionLocation(player.color), rotation = getTokenRotation(lastCardPlayedBy.color), callback = "createSevenSelectionButton"})
+          local colorRGB = getColorfromPlayer(player.color)
+          sevenPlayerButton.setColorTint(colorRGB)
         end
-        yieldState = "7"
-        coroutine.yield() -- Wait for player to choose a hand to take
-        yieldState = nil
-        nextPlayer(1)
-        return
+      end
+      yieldState = "7"
+      coroutine.yield() -- Wait for player to choose a hand to take
+      yieldState = nil
+      nextPlayer(1)
+      return
     end
 
     if lastCard_Name =="skip"
@@ -1179,28 +1252,76 @@ function co()
         if lastCard_Name == "+4"
         then
             stacking_Draw = stacking_Draw + 4
-            if stackingOption
+            if challengeOption and lastColor ~= nil and canChallenge
+            then
+              if challengeButton ~= nil
               then
-                if stackingButton ~= nil
-                then
-                    stackingButton.destruct()
-                end
-                stackingButton = spawnObject({type="PiecePack_Suns",position = {6,1,0}, callback = "createStackingButton"})
-
-                isStacking = true
-                yieldState = "stack"
-                nextPlayer(1)
-                coroutine.yield() -- Get next player and wait to see if they can stack
+                challengeButton.destruct()
+              end
+              canChallenge = false
+              isChallenging = true
+              challengeSuccess = false
+              challengeButton = spawnObject({type="PiecePack_Suns",position = {0,1,-4}, callback = "createChallengeButton"})
             end
+
+            if stackingOption
+            then
+              if stackingButton ~= nil
+              then
+                  stackingButton.destruct()
+              end
+              stackingButton = spawnObject({type="PiecePack_Suns",position = {0,1,4}, callback = "createStackingButton"})
+
+              isStacking = true
+            end
+
+            if isChallenging and isStacking
+            then
+              yieldState = "stack/challenge"
+            elseif isStacking
+            then
+              yieldState = "stack"
+            elseif isChallenging
+            then
+              yieldState = "challenge"
+            end
+
+            nextPlayer(1)
+            coroutine.yield()
+
             if not isStacking
             then
                 deck.dealToColor(stacking_Draw, currentPlayer.color)
                 stacking_Draw = 0
                 yieldState = nil
+                canChallenge = true
                 nextPlayer(1)
                 return
+            elseif isChallenging
+            then
+              if challengeSuccess
+              then
+                broadcastToAll(currentPlayer.steam_name .. " successfully challenged " .. lastPlayer.steam_name, currentPlayer.color)
+                deck.dealToColor(6, lastPlayer.color)
+                yieldState = nil
+                isChallenging = false
+                canChallenge = true
+                nextPlayer(1)
               else
-                return
+                broadcastToAll(currentPlayer.steam_name .. " failed at challenging " .. lastPlayer.steam_name, currentPlayer.color)
+                deck.dealToColor(4, currentPlayer.color)
+                yieldState = nil
+                isChallenging = false
+                canChallenge = true
+                nextPlayer(1)
+              end
+            else
+              if challengeButton ~= nil
+              then
+                challengeButton.destruct()
+              end
+              isChallenging = false
+              return
             end
         else
           nextPlayer(1)
