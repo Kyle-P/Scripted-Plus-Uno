@@ -97,7 +97,7 @@ lastColor = nil
 challengeSuccess = false
 canChallenge = true
 
-version = "0.3.0"
+version = "0.3.1"
 
 nextTurn = nil--coroutine.create(co)
 
@@ -1286,8 +1286,11 @@ function co()
               yieldState = "challenge"
             end
 
-            nextPlayer(1)
-            coroutine.yield()
+            if isChallenging or isStacking
+            then
+              nextPlayer(1)
+              coroutine.yield()
+            end
 
             if not isStacking
             then
