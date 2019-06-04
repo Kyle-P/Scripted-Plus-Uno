@@ -1,0 +1,1213 @@
+players = {}
+PLAYERS = {Player.Green, Player.Blue, Player.Purple, Player.Pink, Player.White, Player.Red, Player.Orange, Player.Yellow}
+
+TOKENLOCATIONS =     {  ["Green"]  = {   0,    1,    9},
+                        ["Blue"]   = { 6.36,   1, 6.36},
+                        ["Purple"] = {   9,    1,    0},
+                        ["Pink"]   = { 6.36,   1,-6.36},
+                        ["White"]  = {    0,   1,   -9},
+                        ["Red"]    = {-6.36,   1,-6.36},
+                        ["Orange"] = {   -9,   1,    0},
+                        ["Yellow"] = {-6.36,   1, 6.36}}
+
+DIRECTIONLOCATIONS = {  ["Green"]  = {   0,   1,    7},
+                        ["Blue"]   = {   5,   1,    5},
+                        ["Purple"] = {   7,   1,    0},
+                        ["Pink"]   = {   5,   1,   -5},
+                        ["White"]  = {   0,   1,   -7},
+                        ["Red"]    = {  -5,   1,   -5},
+                        ["Orange"] = {  -7,   1,    0},
+                        ["Yellow"] = {  -5,   1,    5}}
+
+TOKENROTATIONS =     {  ["Green"]  = {    0, 180,    0},
+                        ["Blue"]   = {    0, 225,    0},
+                        ["Purple"] = {    0, 270,    0},
+                        ["Pink"]   = {    0, 315,    0},
+                        ["White"]  = {    0, 360,    0},
+                        ["Red"]    = {    0,  45,    0},
+                        ["Orange"] = {    0,  90,    0},
+                        ["Yellow"] = {    0, 135,    0}}
+
+tokenLocations = {}
+
+currentPlayer = nil
+currentPlayer_index = nil
+currentPlayer_Label = nil
+
+winner = nil
+
+lastCard_Name = nil
+lastCard_Desc = nil
+
+clockwisePlay = true
+stackingButton = nil
+stacking_Draw = 0
+isStacking = false
+stackingOption = true
+drawOneOption = false
+randPlayerOneOption = true
+zeroSevenOption = false
+jumpInOption = false
+
+startButtonObj_GUID = "d60f3a"
+startButtonObj = nil
+
+playerLabelObj = nil
+playDirectionObj = nil
+
+drawButton = nil
+drawButton2 = nil
+
+wildButtons = {}
+
+sevenButtons = {}
+
+yieldState = nil
+
+deckZone_GUID = "c94b89"
+deckObject_GUID = "18c2e8"
+deck = nil
+
+playMatObject_GUID = "f82f1f"
+
+cardZone_GUID = "5d5c74"
+cardZone = nil
+playDeck = nil
+
+stackingOption_GUID = "397699"
+drawingOption_GUID = "b36922"
+randomOption_GUID = "7f3e9e"
+zeroSevenOption_GUID = "6dbe87"
+jumpInOption_GUID = "055580"
+
+playerHands = {}
+lastCardPlayedBy = nil
+
+deckReset = false
+lastDeck = nil
+gameStarted = false
+
+needShuffle = false
+lastCardCount = 0
+
+nextTurn = nil--coroutine.create(co)
+
+function onFixedUpdate()
+  if needShuffle
+  then
+    deckObjects = deck.getObjects()
+    if #deckObjects > lastCardCount
+    then
+      shuffleDeck()
+      needShuffle = false
+      lastCardCount = #deckObjects
+    end
+  end
+
+  if gameStarted == false
+  then
+    deckObjects = deck.getObjects()
+    if #deckObjects == 108 and deck.getLock() == false
+    then
+      deck.lock()
+    end
+  end
+end
+
+function onLoad(save_state)
+    cardZone = getObjectFromGUID(cardZone_GUID)
+    cardZone.setPosition({1.5, 0, 0})
+    cardZone.setRotation({0, 0, 0})
+
+    startButtonObj = getObjectFromGUID(startButtonObj_GUID)
+    stackingOptionObject = getObjectFromGUID(stackingOption_GUID)
+    drawingOptionObject = getObjectFromGUID(drawingOption_GUID)
+    randomOptionObject = getObjectFromGUID(randomOption_GUID)
+    zeroSevenOptionObject = getObjectFromGUID(zeroSevenOption_GUID)
+    jumpInOptionObject = getObjectFromGUID(jumpInOption_GUID)
+
+    deck = getObjectFromGUID(deckObject_GUID)
+    deck.setPosition({-1.5, 1.5, 0})
+    deck.interactable=false
+    deck.lock()
+
+    playMat = getObjectFromGUID(playMatObject_GUID)
+    playMat.setPosition({1.5, 1, 0})
+    playMat.interactable = false
+    playMat.lock()
+
+    GrabPlayerList()
+end
+
+function onPlayerDisconnect(player)
+  if currentPlayer ~= nil
+    then
+      if player == currentPlayer
+        then
+          broadcastToAll("We lost the current player. Moving to next turn?", "Black")
+          nextPlayer(1)
+      end
+  end
+end
+
+function onChat(message, sender)
+    if message == "!reset"
+    then
+      if sender.host
+      then
+        if gameStarted
+        then
+          resetGame()
+        else
+          broadcastToColor("Game has not started yet", sender.color, sender.color)
+        end
+      end
+    end
+end
+
+function shuffleDeck()
+    deck.shuffle()
+end
+
+function toggleStacking(obj,color)
+    stackingOption = not stackingOption
+    if stackingOption
+    then
+        --messaage = "Stacking : On"
+        obj.editButton({index=0, label = 'Stacking : On'})
+    else
+        --message = "Stacking : Off"
+        obj.editButton({index=0, label = 'Stacking : Off'})
+    end
+end
+
+function toggleDrawing(obj, color)
+    drawOneOption = not drawOneOption
+    if drawOneOption
+    then
+        obj.editButton({index=0, label='Draw : One Card'})
+    else
+        obj.editButton({index=0, label='Draw : Multiple Cards'})
+    end
+end
+
+function toggleRandomPlayerOne(obj, color)
+    randPlayerOneOption = not randPlayerOneOption
+    if randPlayerOneOption
+    then
+        obj.editButton({index=0, label='First Player : Random'})
+    else
+        obj.editButton({index=0, label='First Player : Starter'})
+    end
+end
+
+function toggleJumpIn(obj, color)
+    jumpInOption = not jumpInOption
+    if jumpInOption
+    then
+        obj.editButton({index=0, label='Jump In Rule : On'})
+    else
+        obj.editButton({index=0, label='Jump In Rule : Off'})
+    end
+end
+
+function toggleZeroSeven(obj, color)
+    zeroSevenOption = not zeroSevenOption
+    if zeroSevenOption
+    then
+        obj.editButton({index=0, label='Zero Seven Rule : On'})
+    else
+        obj.editButton({index=0, label='Zero Seven Rule : Off'})
+    end
+end
+
+function setUp()
+      currentPlayer_label = spawnObject({type="PiecePack_Suns",position = {100, 100, 0}, callback = "updatePlayerLabel"})
+      currentDirection_label = spawnObject({type="PiecePack_Suns",position = {100, 100, 0}, callback = "updateDirectionLabel"})
+      drawButton = spawnObject({type = "PiecePack_Suns",position = {-1.5,1,-3}, callback = "createDrawButton"})
+      drawButton2 = spawnObject({type = "PiecePack_Suns",position = {-1.5,1,3},rotation={0,180,0}, callback = "createDrawButton"})
+
+      hideStartMenu()
+
+      listPlayers()
+
+      deck.shuffle()
+
+      for i,player in ipairs(players)
+          do
+              deck.dealToColor(7, player.color)
+          end
+
+      gameStarted = true
+end
+
+function hideStartMenu()
+    startButtonObj.setScale({0,0,0})
+    stackingOptionObject.setScale({0,0,0})
+    drawingOptionObject.setScale({0,0,0})
+    randomOptionObject.setScale({0,0,0})
+    zeroSevenOptionObject.setScale({0,0,0})
+    jumpInOptionObject.setScale({0,0,0})
+end
+
+function showStartMenu()
+    startButtonObj.setScale({1,1,1})
+    stackingOptionObject.setScale({1,1,1})
+    drawingOptionObject.setScale({1,1,1})
+    randomOptionObject.setScale({1,1,1})
+    zeroSevenOptionObject.setScale({1,1,1})
+    jumpInOptionObject.setScale({1,1,1})
+end
+
+function resetGame()
+    if deck ~= nil
+      then
+        deck.reset()
+    end
+
+    if playDeck ~= nil
+    then
+      playDeck.flip()
+      playDeck.setPositionSmooth({deck.getPosition()['x'],deck.getPosition()['y']+2.8,deck.getPosition()['z']})
+    end
+
+    clockwisePlay = true
+
+    currentPlayer = nil
+    currentPlayer_index = nil
+    currentPlayer_Label = nil
+    winner = nil
+    lastCard_Name = nil
+    lastCard_Desc = nil
+    lastCardPlayedBy = nil
+
+    currentDirection_label.destruct()
+    currentPlayer_label.destruct()
+
+    drawButton.destruct()
+    drawButton2.destruct()
+
+    playMat.setColorTint({1, 1, 1})
+
+    showStartMenu()
+
+    gameStarted = false
+end
+
+function checkForWinner()
+  if lastCardPlayedBy ~= nil
+    then
+      if #lastCardPlayedBy.getHandObjects() == 0 and lastCardPlayedBy.seated -- Make sure player hasn't DCed or swapped colors
+        then
+          winner = lastCardPlayedBy
+          resetGameButton = spawnObject({type="PiecePack_Suns",position = {0, 1, 4}, rotation = {0, 180, 0}, callback = "createResetButton"})
+          hideDrawButton()
+
+          broadcastToAll(lastCardPlayedBy.steam_name .. ' Has Won The Game!',getColorfromPlayer(lastCardPlayedBy.color))
+          return true
+        end
+  end
+  return false
+end
+
+function onObjectEnterScriptingZone(zone, obj)
+    if winner == nil
+    then
+        if zone == cardZone
+        then
+            if obj.held_by_color ~= nil
+            then
+                if nextTurn ~= nil
+                then
+                    if coroutine.status(nextTurn) == "suspended"
+                    then
+                        if yieldState ~= nil
+                        then
+                            if yieldState == "stack"
+                            then
+                                if obj.getName() == lastCard_Name
+                                then
+                                    checkCard(obj)
+                                else
+                                    rejectCard(obj, "Must Stack Or Draw Cards")
+                                end
+                            elseif yieldState == "wild"
+                            then
+                                rejectCard(obj,"Must Make A Choice First")
+                            elseif yieldState == "7"
+                            then
+                                rejectCard(obj,"Must Make A Choice First")
+                            end
+                        end
+                    else
+                        checkCard(obj)
+                    end
+                else
+                    checkCard(obj)
+                end
+            end
+        end
+    end
+end
+
+function checkCard(obj)
+    if obj.held_by_color ~= nil
+    then -- object entered is being held by a player
+        if currentPlayer ~= nil
+        then
+            if obj.held_by_color == currentPlayer.color
+            then -- if it is the players turn
+                if lastCard_Name == nil
+                then -- if no cards have been played yet
+                    playCard(obj)
+                else -- if cards have already been played
+                    if obj.getDescription() == "WILD"
+                    then -- if the card being palyed is a wild card
+                        playCard(obj)
+                    elseif obj.getName() == lastCard_Name
+                    then -- if the card being played has the same face value as the last card
+                        playCard(obj)
+                    elseif obj.getDescription() == lastCard_Desc
+                    then -- if the card being played is the same color as the last card
+                        playCard(obj)
+                    else -- if the card being played cannot be played
+                        rejectCard(obj,"This Card Cannot Be Played")
+                    end
+                end
+            elseif jumpInOption
+            then
+              if lastCard_Name == nil and lastCard_Desc == nil
+              then -- if no cards have been played yet
+                  rejectCard(obj, "You can not jump in on the first turn")
+              else -- if cards have already been played
+                  if obj.getName() == lastCard_Name and obj.getName() == "wild"
+                  then
+                      playCard(obj)
+                  elseif obj.getName() == lastCard_Name and obj.getName() == "+4"
+                  then
+                      playCard(obj)
+                  elseif obj.getName() == lastCard_Name and obj.getDescription() == lastCard_Desc
+                  then -- if the card being played is the exact same as the last card
+                      playCard(obj)
+                  else -- if the card being played cannot be played
+                      rejectCard(obj,"You can not jump in now (Does Not Exactly Match the Previous)")
+                  end
+              end
+            else -- if it is not the players turn
+                rejectCard(obj,"It Is Not Your Turn")
+            end
+        end
+    end
+end
+
+function playCard(cardObj)
+    if nextTurn ~= nil
+    then
+        if coroutine.status(nextTurn) == "suspended"
+        then
+            coroutine.resume(nextTurn)
+        end
+    end
+
+    local playedByColor = getColorfromPlayer(cardObj.held_by_color)
+    local playedByPlayer = getPlayerFromColor(playedByColor)
+
+    lastCardPlayedBy = playedByPlayer
+
+    if lastCardPlayedBy ~= nil
+    then
+      if lastCardPlayedBy ~= currentPlayer and jumpInOption
+      then
+          broadcastToAll(lastCardPlayedBy.steam_name .. ' has jumped in!', lastCardPlayedBy.color)
+          currentPlayer = lastCardPlayedBy
+          currentPlayer_index = getPlayerIndex(lastCardPlayedBy)
+
+          updatePlayerLabel(currentPlayer_label)
+          updateDirectionLabel(currentDirection_label)
+      end
+    end
+
+    cardObj.setRotationSmooth({0,180,0})
+    local FixedPos= cardZone.getPosition()
+    cardObj.setPositionSmooth({FixedPos.x,2,FixedPos.z})
+
+    if checkForWinner() == false
+    then
+      lastCard_Name = cardObj.getName()
+      lastCard_Desc = cardObj.getDescription()
+
+      if(lastCard_Desc~="WILD")then
+          playMat.setColorTint(getColorfromCard(lastCard_Desc))
+      end
+
+      if lastCard_Name == "0" and zeroSevenOption
+        then
+          moveHandsRight()
+      end
+
+      updateDecks()
+
+      nextTurn = coroutine.create(co)
+      coroutine.resume(nextTurn)
+    end
+end
+
+function rejectCard(cardObj, rejectMessage)
+    player = Player[cardObj.held_by_color]
+    broadcastToColor(rejectMessage, player.color, getColorfromPlayer(player.color))
+    pos = {player.getPlayerHand()['pos_x'],player.getPlayerHand()['pos_y'],player.getPlayerHand()['pos_z']}
+    cardObj.setPositionSmooth(pos)
+end
+
+function moveHandsRight()
+    broadcastToAll(currentPlayer.steam_name .. ' has played a zero. Moving hands to the right', currentPlayer.color)
+
+    playerHands = {}
+
+    for i, player in ipairs(players)
+    do
+        local playerHand = player.getHandObjects()
+        table.insert(playerHands, playerHand)
+    end
+
+    for i, hand in ipairs(playerHands)
+
+      do
+        local playerToRight = 0
+
+        if i - 1 < 1
+          then
+            playerToRight = #players
+          else
+            playerToRight = i - 1
+        end
+
+        for h, card in ipairs(hand)
+          do
+            pos = {players[playerToRight].getPlayerHand()['pos_x'],players[playerToRight].getPlayerHand()['pos_y'],players[playerToRight].getPlayerHand()['pos_z']}
+            card.setPosition(pos)
+            carRot = players[playerToRight].getPlayerHand()['rot_y'] + 180
+            card.setRotation({0, carRot, 0})
+        end
+    end
+end
+
+function createDrawButton(obj)
+    obj.lock()
+    obj.createButton({click_function="drawCard", label = "Draw", function_owner = Global, position = {0,0.1,0}, rotation = {0,180,0}, width = 1500, height = 500, font_size=350})
+end
+
+function hideDrawButton()
+    drawButton.setScale({0,0,0})
+    drawButton2.setScale({0,0,0})
+end
+
+function showDrawButton()
+    drawButton.setScale({1,1,1})
+    drawButton2.setScale({1,1,1})
+end
+
+function createResetButton(button)
+    button.lock()
+    button.setColorTint(getColorfromPlayer(winner.color))
+    button.createButton({click_function='clickResetButton', label='Reset Game', function_owner=Global, position={0, 0.1, 0}, rotation={0, 0, 0}, width=2500, height=850, font_size=400})
+end
+
+function clickResetButton(obj, color)
+    resetGame()
+    obj.destruct()
+end
+
+function createStackingButton(button)
+    hideDrawButton()
+    button.lock()
+    button.setColorTint(getColorfromPlayer(currentPlayer.color))
+    button.createButton({click_function='clickStackingButton', label='Click here if \nyou can\'t stack', function_owner=Global, position={0, 0.1, 0}, rotation={0, 180, 0}, width=2500, height=850, font_size=350})
+end
+
+function createWildButton(button)
+    hideDrawButton()
+    button.lock()
+    color = nil
+    for i, wildbutton in ipairs(wildButtons)
+    do
+        if wildbutton == button
+        then
+            if i == 1
+            then
+                color= "RED"
+            elseif i == 2
+            then
+                color="YELLOW"
+            elseif i == 3
+            then
+                color="GREEN"
+            elseif i == 4
+            then
+                color="BLUE"
+            end
+        end
+    end
+    button.setColorTint(getColorfromCard(color))
+    button.createButton({click_function='clickWildButton', label=''.. color, function_owner=Global, position={0, 0.1, 0}, rotation={0, 180, 0}, width=1600, height=325, font_size=350})
+end
+
+function createSevenSelectionButton(button)
+    table.insert(sevenButtons, button)
+    hideDrawButton()
+    button.interactable=false
+    button.lock()
+    button.createButton({click_function='clickTakeHandButton', label='Take hand', function_owner=Global, position={0, 0.1, 0}, rotation={0, 180, 0}, width=2000, height=850, font_size=350})
+end
+
+function clickTakeHandButton(obj, color)
+    if color == lastCardPlayedBy.color
+      then
+        local chosenPlayer = getPlayerFromColor(obj.getColorTint())
+        if chosenPlayer ~= nil and lastCardPlayedBy ~= nil and chosenPlayer ~= lastCardPlayedBy
+          then
+            local currentPlayer_Hand = lastCardPlayedBy.getHandObjects()
+            local chosenPlayer_Hand = chosenPlayer.getHandObjects()
+
+            for i, chosenCard in ipairs(chosenPlayer_Hand)
+            do
+              pos = {lastCardPlayedBy.getPlayerHand()['pos_x'], lastCardPlayedBy.getPlayerHand()['pos_y'], lastCardPlayedBy.getPlayerHand()['pos_z']}
+              chosenCard.setPosition(pos)
+              cardRot = lastCardPlayedBy.getPlayerHand()['rot_y'] + 180
+              chosenCard.setRotation({0, cardRot, 0})
+            end
+
+            for i, playerCard in ipairs(currentPlayer_Hand)
+            do
+              pos = {chosenPlayer.getPlayerHand()['pos_x'], chosenPlayer.getPlayerHand()['pos_y'], chosenPlayer.getPlayerHand()['pos_z']}
+              playerCard.setPosition(pos)
+              cardRot = chosenPlayer.getPlayerHand()['rot_y'] + 180
+              playerCard.setRotation({0, cardRot, 0})
+            end
+        end
+        coroutine.resume(nextTurn)
+        showDrawButton()
+        destroySevenButtons()
+    end
+end
+
+function destroySevenButtons()
+  for i, button in ipairs(sevenButtons)
+  do
+    button.destruct()
+  end
+
+  sevenButtons = {}
+end
+
+function drawCard(obj,color)
+    if color ~= nil
+    then
+        if color == currentPlayer.color
+        then
+            if yieldState == "stack"
+            then
+                broadcastToColor('You Can Not Draw A Card At This Time', color   , getColorfromPlayer(color))
+
+            elseif yieldState == "wild"
+            then
+                broadcastToColor('You Can Not Draw A Card At This Time', color   , getColorfromPlayer(color))
+            else
+                deck.dealToColor(1, color)
+                if drawOneOption
+                then
+                    nextPlayer(1)
+                end
+            end
+        else
+            broadcastToColor('You Can Only Draw On Your Turn', color   , getColorfromPlayer(color))
+        end
+    end
+end
+
+function clickStackingButton(obj, color)
+    if color == currentPlayer.color
+    then
+        isStacking = false
+        lastCardPlayedBy = currentPlayer
+        coroutine.resume(nextTurn)
+        obj.destruct()
+        showDrawButton()
+    end
+end
+
+function clickWildButton(obj, color)
+    if color == currentPlayer.color
+    then
+        if obj == wildButtons[1]
+        then
+            lastCard_Desc = "RED"
+        elseif obj == wildButtons[2]
+        then
+            lastCard_Desc = "YELLOW"
+        elseif obj == wildButtons[3]
+        then
+            lastCard_Desc = "GREEN"
+        elseif obj == wildButtons[4]
+        then
+            lastCard_Desc = "BLUE"
+        end
+        broadcastToAll('Color Is Now ' .. lastCard_Desc,getColorfromCard(lastCard_Desc))
+        playMat.setColorTint(getColorfromCard(lastCard_Desc))
+
+        coroutine.resume(nextTurn)
+        wildButtons[1].destruct()
+        wildButtons[2].destruct()
+        wildButtons[3].destruct()
+        wildButtons[4].destruct()
+        showDrawButton()
+    end
+end
+
+function onPlayerChangedColor(player_color)
+    if currentPlayer ~= nil
+      then
+        if player_color ~= "Grey"
+          then
+            cleanHands()
+            if player_color ~= "Black"
+              then
+                if #Player[player_color].getHandObjects() == 0
+                  then
+                      deck.dealToColor(7, player_color)
+                  end
+            end
+        end
+    end
+    GrabPlayerList()
+end
+
+function updateDecks()
+    zoneObjects = cardZone.getObjects()
+    deckObjects = deck.getObjects()
+
+    if deck.getLock()
+    then
+      deck.unlock()
+    end
+
+    for i, obj in ipairs(zoneObjects)
+      do
+        if obj ~= playMat
+          then
+            playDeck = obj
+            --playDeck.interactable=false
+            break
+        end
+    end
+
+    if #deckObjects < 18
+    then
+        lastCardCount = #deckObjects
+        playDeck.flip()
+        playDeck.shuffle()
+        playDeck.setPositionSmooth({deck.getPosition()['x'],deck.getPosition()['y']+2.8,deck.getPosition()['z']})
+        needShuffle = true
+    end
+end
+
+function startGame(obj, color)
+  if gameStarted == false
+  then
+    if randPlayerOneOption
+    then
+      pickRandPlayerOne(obj,color)
+    else
+      pickPlayerOne(obj,color)
+    end
+  end
+end
+
+function pickRandPlayerOne(obj,color)
+    local playerCount = 0
+    for i , player in ipairs(players)
+      do
+        playerCount = playerCount + 1
+    end
+
+    if playerCount > 0
+      then
+        local rand = math.random(1, playerCount)
+        for i , player in ipairs(players)
+          do
+            if i == rand
+              then
+                currentPlayer = player
+                currentPlayer_index = i
+            end
+        end
+        if currentPlayer ~= nil
+          then
+            setUp()
+          else
+            printToColor('There was an error getting the starting player', color ,getColorfromPlayer(color))
+        end
+      else
+        printToColor('Need at least two players to start', color ,getColorfromPlayer(color))
+    end
+end
+
+function pickPlayerOne(obj,color)
+    if color ~= "Grey"
+    then
+        if color ~= "Black"
+        then
+            for i , player in ipairs(players)
+            do
+                if color == player.color
+                then
+                    currentPlayer = player
+                    currentPlayer_index = i
+                end
+            end
+            setUp()
+        else
+            printToColor('Game Masters cannot be a player', color,getColorfromPlayer(color))
+        end
+    else
+        printToColor('Spectators cannot be a player', color ,getColorfromPlayer(color))
+    end
+end
+
+function updatePlayerLabel(this)
+    this.interactable = false
+    this.lock()
+    this.setColorTint(getColorfromPlayer(currentPlayer.color))
+
+    this.setPosition(getTokenLocation(currentPlayer.color))
+    this.setRotation(getTokenRotation(currentPlayer.color))
+
+    if this.getButtons() ~= nil
+    then
+        this.editButton({index=0,label=currentPlayer.steam_name})
+    else
+        this.createButton({click_function='dummy', label=currentPlayer.steam_name, function_owner=Global, position={0, 0.1, 0}, rotation={0, 180, 0}, width=2250, height=400, font_size=350})
+    end
+end
+
+function updateDirectionLabel(this)
+    this.interactable = false
+    this.lock()
+    this.setColorTint(getColorfromPlayer(currentPlayer.color))
+
+    this.setPosition(getDirectionLocation(currentPlayer.color))
+    this.setRotation(getTokenRotation(currentPlayer.color))
+
+    if this.getButtons() ~= nil
+    then
+      if clockwisePlay
+        then
+          this.editButton({index=0,label='<---'})
+        else
+          this.editButton({index=0,label='--->'})
+      end
+    else
+      if clockwisePlay
+        then
+          this.createButton({click_function='dummy', label='<---', function_owner=Global, position={0, 0.1, 0}, rotation={0, 180, 0}, width=2250, height=400, font_size=350})
+        else
+          this.createButton({click_function='dummy', label='--->', function_owner=Global, position={0, 0.1, 0}, rotation={0, 180, 0}, width=2250, height=400, font_size=350})
+      end
+    end
+end
+
+function dummy()
+end
+
+function GrabPlayerList()
+    counter = 1
+    players = {}
+    tokenLocations= {}
+    tokenRotations= {}
+
+    for i, player in ipairs(PLAYERS)
+    do
+        if player.seated
+        then
+            players[counter] = player
+            tokenLocations[counter] = getTokenLocation(i)
+            counter = counter + 1
+        end
+    end
+
+    if currentPlayer ~= nil
+    then
+        if #players > 0
+        then
+            if currentPlayer.seated == false
+            then
+                currentPlayer = players[#players]
+                updatePlayerLabel(currentPlayer_label)
+                updateDirectionLabel(currentDirection_label)
+            end
+        end
+    end
+end
+
+function cleanHands()
+    for i, player in ipairs(PLAYERS)
+    do
+        if player.seated == false
+        then
+            if #player.getHandObjects() > 0
+            then
+                deckPosition = { deck.getPosition()['x'], deck.getPosition()['y'] + 0.5, deck.getPosition()['z'] }
+                deckRotation = deck.getRotation()
+                for i, card in ipairs(player.getHandObjects())
+                do
+                    card.setRotation(deckRotation)
+                    card.setPosition(deckPosition)
+                end
+                deck.shuffle()
+            end
+        end
+    end
+end
+
+function listPlayers()
+    GrabPlayerList()
+    counter = 0
+    for i = 1,#players,1
+    do
+        broadcastToAll(players[(currentPlayer_index+counter)].steam_name .. " is player " .. i, getColorfromPlayer(players[(currentPlayer_index+counter)].color))
+        --broadcastToColor("You Are Player " .. i, players[(currentPlayer_index+counter)].color,getColorfromPlayer(players[(currentPlayer_index+counter)].color))
+        if (currentPlayer_index + counter + 1) <= #players
+        then
+            counter = counter + 1
+        else
+            counter = (-currentPlayer_index)+1
+        end
+    end
+end
+
+function round(num, numDecimalPlaces)
+  local mult = 10^(numDecimalPlaces or 0)
+  return math.floor(num * mult + 0.5) / mult
+end
+
+function getPlayerFromColor(color)
+  for i, player in ipairs(players)
+  do
+    local pc = getColorfromPlayer(player.color)
+    if pc[1] == round(color[1], 3) and pc[2] == round(color[2], 3) and pc[3] == round(color[3], 3) -- This seems like a crap way to do this...
+      then
+        return player
+      end
+  end
+  broadcastToAll('Did not find player', "Black")
+end
+
+function getColorfromPlayer(player_color)
+    if player_color == "Green"
+        then
+            do return {0.129,0.701,0.168} end
+        end
+    if player_color == "Blue"
+        then
+            do return {0.118, 0.53, 1} end
+        end
+    if player_color == "Purple"
+        then
+            do return {0.627, 0.125, 0.941} end
+        end
+    if player_color == "Pink"
+        then
+            do return {0.96, 0.439, 0.807} end
+        end
+    if player_color == "White"
+        then
+            do return {1, 1, 1} end
+        end
+    if player_color == "Red"
+        then
+            do return {0.856, 0.1, 0.094} end
+        end
+    if player_color == "Orange"
+        then
+            do return {0.956, 0.392, 0.113} end
+        end
+    if player_color == "Yellow"
+        then
+            do return {0.905, 0.898, 0.172} end
+        end
+    if player_color == "Grey"
+        then
+            do return {0.5, 0.5, 0.5} end
+        end
+    if player_color == "Black"
+        then
+            do return {0.25, 0.25, 0.25} end
+        end
+end
+
+function getColorfromCard(card_color)
+    if card_color == "GREEN"
+        then
+            return {0.129,0.701,0.168}
+        end
+    if card_color == "BLUE"
+        then
+            return {0.118, 0.53, 1}
+        end
+    if card_color == "RED"
+        then
+            return {0.856, 0.1, 0.094}
+        end
+    if card_color == "YELLOW"
+        then
+            return {0.905, 0.898, 0.172}
+        end
+end
+
+function getTokenLocation(color)
+    if color == "Green"
+    then
+        return TOKENLOCATIONS.Green
+    elseif color == "Blue"
+    then
+        return TOKENLOCATIONS.Blue
+    elseif color == "Purple"
+    then
+        return TOKENLOCATIONS.Purple
+    elseif color == "Pink"
+    then
+        return TOKENLOCATIONS.Pink
+    elseif color == "White"
+    then
+        return TOKENLOCATIONS.White
+    elseif color == "Red"
+    then
+        return TOKENLOCATIONS.Red
+    elseif color == "Orange"
+    then
+        return TOKENLOCATIONS.Orange
+    elseif color == "Yellow"
+    then
+        return TOKENLOCATIONS.Yellow
+    end
+end
+
+function getDirectionLocation(color)
+    if color == "Green"
+    then
+        return DIRECTIONLOCATIONS.Green
+    elseif color == "Blue"
+    then
+        return DIRECTIONLOCATIONS.Blue
+    elseif color == "Purple"
+    then
+        return DIRECTIONLOCATIONS.Purple
+    elseif color == "Pink"
+    then
+        return DIRECTIONLOCATIONS.Pink
+    elseif color == "White"
+    then
+        return DIRECTIONLOCATIONS.White
+    elseif color == "Red"
+    then
+        return DIRECTIONLOCATIONS.Red
+    elseif color == "Orange"
+    then
+        return DIRECTIONLOCATIONS.Orange
+    elseif color == "Yellow"
+    then
+        return DIRECTIONLOCATIONS.Yellow
+    end
+end
+
+function getTokenRotation(color)
+    if color == "Green"
+    then
+        return TOKENROTATIONS.Green
+    elseif color == "Blue"
+    then
+        return TOKENROTATIONS.Blue
+    elseif color == "Purple"
+    then
+        return TOKENROTATIONS.Purple
+    elseif color == "Pink"
+    then
+        return TOKENROTATIONS.Pink
+    elseif color == "White"
+    then
+        return TOKENROTATIONS.White
+    elseif color == "Red"
+    then
+        return TOKENROTATIONS.Red
+    elseif color == "Orange"
+    then
+        return TOKENROTATIONS.Orange
+    elseif color == "Yellow"
+    then
+        return TOKENROTATIONS.Yellow
+    end
+end
+
+function getPlayerIndex(search)
+    for i, player in ipairs(players)
+      do
+        if (player == search)
+          then
+            return i
+        end
+    end
+
+    return 0
+end
+
+function nextPlayer(amt)
+    if clockwisePlay
+    then -- if play is in clockwise rotation
+        if currentPlayer_index + amt > #players
+        then
+          if #players == 1
+          then
+            currentPlayer_index = 1
+          else
+            currentPlayer_index = (currentPlayer_index + amt) - #players
+          end
+        else
+            currentPlayer_index = currentPlayer_index + amt
+        end
+    else -- if play is in counter-clockwise rotation
+        if currentPlayer_index - amt < 1
+        then
+          if #players == 1
+          then
+            currentPlayer_index = 1
+          else
+            currentPlayer_index = #players - math.abs(currentPlayer_index - amt)
+          end
+        else
+            currentPlayer_index = currentPlayer_index - amt
+        end
+    end
+
+    currentPlayer = players[currentPlayer_index]
+
+    updatePlayerLabel(currentPlayer_label)
+    updateDirectionLabel(currentDirection_label)
+end
+
+function co()
+    --CHECK FOR REVERSE PLAY
+    if lastCard_Name == "reverse"
+    then -- reverse order of play if a reverse card has been played
+        clockwisePlay = not clockwisePlay
+        nextPlayer(1)
+        return
+    end
+
+    if lastCard_Name == "7" and zeroSevenOption and #players > 1
+      then
+        for i, player in ipairs(players)
+        do
+          if player ~= lastCardPlayedBy
+          then
+            sevenPlayerButton = spawnObject({type="PiecePack_Suns",position = getDirectionLocation(player.color), rotation = getTokenRotation(lastCardPlayedBy.color), callback = "createSevenSelectionButton"})
+            local colorRGB = getColorfromPlayer(player.color)
+            sevenPlayerButton.setColorTint(colorRGB)
+          end
+        end
+        yieldState = "7"
+        coroutine.yield() -- Wait for player to choose a hand to take
+        yieldState = nil
+        nextPlayer(1)
+        return
+    end
+
+    if lastCard_Name =="skip"
+    then
+        nextPlayer(2)
+        yieldState = nil
+        return
+    elseif lastCard_Name == "+2"
+    then
+        stacking_Draw = stacking_Draw + 2
+        if stackingOption
+        then
+            if stackingButton ~= nil
+            then
+                stackingButton.destruct()
+            end
+            stackingButton = spawnObject({type="PiecePack_Suns",position = {6,1,0}, callback = "createStackingButton"})
+
+            isStacking = true
+            yieldState = "stack"
+            nextPlayer(1)
+            coroutine.yield() -- Get next player and see if they can stack
+        end
+        if not isStacking
+        then
+            deck.dealToColor(stacking_Draw, currentPlayer.color)
+            stacking_Draw = 0
+            yieldState = nil
+            nextPlayer(1)
+            return
+          else
+            return
+        end
+    elseif lastCard_Desc == 'WILD'
+    then -- if a wild has been played
+        if wildButtons[1] ~= nil
+        then
+            wildButtons[1].destruct()
+            wildButtons[2].destruct()
+            wildButtons[3].destruct()
+            wildButtons[4].destruct()
+        end
+        if stackingOption
+        then
+            if stackingButton ~= nil
+            then
+                stackingButton.destruct()
+            end
+        end
+        wildButtons[1] = spawnObject({type="PiecePack_Suns",position = {5,1,3}, callback="createWildButton"})
+        wildButtons[2] = spawnObject({type="PiecePack_Suns",position = {5,1,1}, callback="createWildButton"})
+        wildButtons[3] = spawnObject({type="PiecePack_Suns",position = {5,1,-1}, callback="createWildButton"})
+        wildButtons[4] = spawnObject({type="PiecePack_Suns",position = {5,1,-3}, callback="createWildButton"})
+
+        yieldState = "wild"
+        coroutine.yield() -- Wait for currentPlayer to choose a new color
+
+        if lastCard_Name == "+4"
+        then
+            stacking_Draw = stacking_Draw + 4
+            if stackingOption
+              then
+                if stackingButton ~= nil
+                then
+                    stackingButton.destruct()
+                end
+                stackingButton = spawnObject({type="PiecePack_Suns",position = {6,1,0}, callback = "createStackingButton"})
+
+                isStacking = true
+                yieldState = "stack"
+                nextPlayer(1)
+                coroutine.yield() -- Get next player and wait to see if they can stack
+            end
+            if not isStacking
+            then
+                deck.dealToColor(stacking_Draw, currentPlayer.color)
+                stacking_Draw = 0
+                yieldState = nil
+                nextPlayer(1)
+                return
+              else
+                return
+            end
+        else
+          nextPlayer(1)
+        end
+    else -- no special card played
+        nextPlayer(1)
+        return
+    end
+    yieldState = nil
+end

@@ -1,0 +1,6 @@
+function onLoad(save_state)
+  self.interactable=false
+  self.lock()
+  self.setPosition({4, 1, -10})
+  self.createButton({click_function='toggleJumpIn', label='Jump In Rule : Off', function_owner=Global, position={0, 0.1, 0}, rotation={0, 180, 0}, width=2900, height=750, font_size=300})
+end

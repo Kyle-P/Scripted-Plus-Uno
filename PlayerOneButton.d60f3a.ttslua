@@ -1,0 +1,6 @@
+function onLoad(save_state)
+    self.interactable=false
+    self.lock()
+    self.setPosition({0, 1, 4})
+    self.createButton({click_function='startGame', label='Start Game', function_owner=Global, position={0, 0.1, 0}, rotation={0, 180, 0}, width=2325, height=750, font_size=350})
+end
