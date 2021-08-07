@@ -1318,6 +1318,7 @@ function co()
                 canChallenge = true
                 nextPlayer(1)
               end
+              stacking_Draw = 0
             else
               if challengeButton ~= nil
               then
