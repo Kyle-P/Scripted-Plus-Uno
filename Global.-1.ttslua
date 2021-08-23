@@ -516,11 +516,11 @@ function moveHandsRight()
             playerToRight = i - 1
         end
 
+        pos = {players[playerToRight].getPlayerHand()['pos_x'],players[playerToRight].getPlayerHand()['pos_y'],players[playerToRight].getPlayerHand()['pos_z']}
+        carRot = players[playerToRight].getPlayerHand()['rot_y'] + 180
         for h, card in ipairs(hand)
           do
-            pos = {players[playerToRight].getPlayerHand()['pos_x'],players[playerToRight].getPlayerHand()['pos_y'],players[playerToRight].getPlayerHand()['pos_z']}
             card.setPosition(pos)
-            carRot = players[playerToRight].getPlayerHand()['rot_y'] + 180
             card.setRotation({0, carRot, 0})
         end
     end
