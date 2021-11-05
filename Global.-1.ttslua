@@ -610,21 +610,17 @@ function clickTakeHandButton(obj, color)
             local currentPlayer_Hand = lastCardPlayedBy.getHandObjects()
             local chosenPlayer_Hand = chosenPlayer.getHandObjects()
 
-            for i, chosenCard in ipairs(chosenPlayer_Hand)
-            do
-              pos = {lastCardPlayedBy.getPlayerHand()['pos_x'], lastCardPlayedBy.getPlayerHand()['pos_y'], lastCardPlayedBy.getPlayerHand()['pos_z']}
-              chosenCard.setPosition(pos)
-              cardRot = lastCardPlayedBy.getPlayerHand()['rot_y'] + 180
-              chosenCard.setRotation({0, cardRot, 0})
-            end
-
             for i, playerCard in ipairs(currentPlayer_Hand)
             do
-              pos = {chosenPlayer.getPlayerHand()['pos_x'], chosenPlayer.getPlayerHand()['pos_y'], chosenPlayer.getPlayerHand()['pos_z']}
-              playerCard.setPosition(pos)
-              cardRot = chosenPlayer.getPlayerHand()['rot_y'] + 180
-              playerCard.setRotation({0, cardRot, 0})
+              playerCard.deal(1, chosenPlayer.color)
             end
+
+            Wait.condition(function()
+              for i, chosenCard in ipairs(chosenPlayer_Hand)
+              do
+                chosenCard.deal(1, lastCardPlayedBy.color)
+              end
+            end, function() return #lastCardPlayedBy.getHandObjects() == 0 end)
         end
         coroutine.resume(nextTurn)
         showDrawButton()
